@@ -98,6 +98,7 @@ with siteHeader:
 
   col1.metric("$ Total Distribution", str(locale.currency(round_df.loc[:, 'amountUSD'].sum().round(2), grouping = True)))
   col2.metric("Avg Total Distribution", str(locale.currency(round_df.loc[:, 'amountUSD'].mean().round(2), grouping = True)))
+  pd.options.display.float_format = '{:,.2f}'.format
   col3.metric("Total Unique Contributors",str(round_df.loc[:, 'uniqueContributors'].sum()))
   
   st.title('Project Overview')
@@ -160,29 +161,38 @@ with siteHeader:
   col2_oc.metric("Projects in Current Round", str(p_data['metadata.application.project.id'].nunique()), f"{new_round_projects['metadata.application.project.id'].nunique()} from yesterday")
   col3_oc.metric("Total Votes", "N/A", "0 from yesterday")
 
-  st.subheader('Projects by Current Round')
+  p_count = p_data['metadata.application.project.createdAt'].value_counts().rename_axis('Creation date').reset_index(name='Projects')
+  
+  col_char1, col_char2 = st.columns(2)
+  with col_char1:
+    st.subheader('Project Creation')
+    st.bar_chart(p_count, x = 'Creation date', y = 'Projects')
 
-  # style
-  th_props = [
-    ('font-size', '14px'),
-    ('text-align', 'center'),
-    ('font-weight', 'bold'),
-    ('color', '#6d6d6d'),
-    ('background-color', '#f7ffff')
-    ]
+  with col_char2:
+    st.subheader('Projects in the Beta Round')
+    st.bar_chart(beta_round_dataset, y = 'Total projects', x = 'Round name')
+
+  # # style
+  # th_props = [
+  #   ('font-size', '14px'),
+  #   ('text-align', 'center'),
+  #   ('font-weight', 'bold'),
+  #   ('color', '#6d6d6d'),
+  #   ('background-color', '#f7ffff')
+  #   ]
                                 
-  td_props = [
-    ('font-size', '12px')
-    ]
+  # td_props = [
+  #   ('font-size', '12px')
+  #   ]
                                   
-  styles = [
-    dict(selector="th", props=th_props),
-    dict(selector="td", props=td_props)
-    ]
+  # styles = [
+  #   dict(selector="th", props=th_props),
+  #   dict(selector="td", props=td_props)
+  #   ]
 
-  # table
-  table_df = beta_round_dataset[['Round name', 'Total projects']].style.set_properties(**{'text-align': 'left'}).set_table_styles(styles)
-  st.table(table_df)
+  # # table
+  # table_df = beta_round_dataset[['Round name', 'Total projects']].style.set_properties(**{'text-align': 'left'}).set_table_styles(styles)
+  # st.table(table_df)
   # # Contributors
   # contributors_url = f"https://grants-stack-indexer.fly.dev/data/{chain_id}/rounds/{round_address}/contributors.json"
   # con_response = requests.request("GET", contributors_url)
@@ -236,7 +246,18 @@ with siteHeader:
 
     df[['date']] =  df[['date']].apply(pd.to_datetime)
 
-    filtered_analytics = df_filter('Datetime Filter (Move slider to filter)', df)
+    # start_date, end_date = st.date_input('start date  - end date :', [])
+    # if start_date < end_date:
+    #     pass
+    # else:
+    #     st.error('Error: End date must fall after start date.')
+
+    # filtered_analytics = (df['date'].dt.date > start_date) & (df['date'].dt.date <= end_date)
+
+    cols1,_ = st.columns((1,2)) # To make it narrower
+    with cols1:
+      filtered_analytics = df_filter('Datetime Filter (Move slider to filter)', df)
+
     col_1, col_2 = st.columns(2)
 
     with col_1:
@@ -338,6 +359,10 @@ with siteHeader:
     b_df = pd.DataFrame(b_zipped_list, columns=['date', 'active_users', 'new_users', 'scrolled_users', 'eng_duration', 'wau_per_mau', 'sessions', 'sessions_per_user']).sort_values(by=['date'], ascending=False)
 
     b_df[['date']] =  b_df[['date']].apply(pd.to_datetime) 
+
+    cols1,_ = st.columns((1,2)) # To make it narrower
+    with cols1:
+      filtered_analytics = df_filter('Datetime Filter (Move slider to filter)', b_df)
 
     # b_filtered_analytics = df_filter('Datetime Filter (Move slider to filter)', b_df)
     b_col_1, b_col_2 = st.columns(2)
