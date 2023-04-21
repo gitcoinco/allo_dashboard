@@ -45,6 +45,27 @@ def df_filter(message,df):
 
         return filtered_df
 
+def df_filter_2(message,df):
+        slider_3, slider_4 = st.slider('%s' % (message),0,len(df)-1,[0,len(df)-1],2)
+
+        while len(str(df.iloc[slider_3][1]).replace('.0','')) < 4:
+            df.iloc[slider_3,1] = '0' + str(df.iloc[slider_3][1]).replace('.0','')
+            
+        while len(str(df.iloc[slider_4][1]).replace('.0','')) < 4:
+            df.iloc[slider_4,1] = '0' + str(df.iloc[slider_3][1]).replace('.0','')
+
+        start_date = datetime.datetime.strptime(str(df.iloc[slider_3][0]).replace('.0','') + str(df.iloc[slider_3][1]).replace('.0',''),'%Y-%m-%d %H:%M:%S%f')
+        start_date = start_date.strftime('%d %b %Y, %I:%M%p')
+        
+        end_date = datetime.datetime.strptime(str(df.iloc[slider_4][0]).replace('.0','') + str(df.iloc[slider_4][1]).replace('.0',''),'%Y-%m-%d %H:%M:%S%f')
+        end_date = end_date.strftime('%d %b %Y, %I:%M%p')
+
+        st.info('Start: **%s**    End: **%s**' % (start_date,end_date))
+        
+        filtered_df = df.iloc[slider_3:slider_4+1][:].reset_index(drop=True)
+
+        return filtered_df
+
 # def df_filter(message,df):
 #         slider_1, slider_2 = st.slider('%s' % (message),0,len(df)-1,[0,len(df)-1],1)
 
@@ -109,11 +130,12 @@ with siteHeader:
   tot_proj_json = tot_proj_response.json()
   tot_project_df = pd.json_normalize(tot_proj_json)
 
-  print(tot_project_df.keys())
   tot_project_df['metadata.createdAt'] = tot_project_df['metadata.createdAt'].fillna(0)
   tot_project_df['metadata.createdAt'] = pd.to_datetime(tot_project_df['metadata.createdAt'].astype(int)/1000,unit='s')
 
-  new_projects = tot_project_df.loc[tot_project_df['metadata.createdAt'] >= pd.Timestamp.today().normalize()] 
+  tot_proj = tot_project_df.loc[tot_project_df['metadata.createdAt'] >= '2023-04-01 00:00:00'] 
+
+  new_projects = tot_proj.loc[tot_proj['metadata.createdAt'] >= pd.Timestamp.today().normalize()] 
 
   # Round details
   filtered_round_data = round_df.loc[round_df['roundStartTime'] >= '2023-04-25 00:00:00']
@@ -164,13 +186,13 @@ with siteHeader:
   p_count = p_data['metadata.application.project.createdAt'].value_counts().rename_axis('Creation date').reset_index(name='Projects')
   
   col_char1, col_char2 = st.columns(2)
-  with col_char1:
-    st.subheader('Project Creation')
-    st.bar_chart(p_count, x = 'Creation date', y = 'Projects')
+  # with col_char1:
+  st.subheader('Project Creation')
+  st.bar_chart(p_count, x = 'Creation date', y = 'Projects')
 
-  with col_char2:
-    st.subheader('Projects in the Beta Round')
-    st.bar_chart(beta_round_dataset, y = 'Total projects', x = 'Round name')
+  # with col_char2:
+  #   st.subheader('Projects in the Beta Round')
+  #   st.bar_chart(beta_round_dataset, y = 'Total projects', x = 'Round name')
 
   # # style
   # th_props = [
@@ -222,6 +244,8 @@ with siteHeader:
     explorer_response = client.run_report(request)
 
     date = []
+    device_category = []
+    device_model = []
     active_users = []
     new_users = []
     scrolled_users = []
@@ -229,9 +253,12 @@ with siteHeader:
     wau_per_mau = []
     sessions = []
     sessions_per_user = []
+    avg_session_duration = []
 
     for row in explorer_response.rows:
         date.append(row.dimension_values[0].value)
+        # device_category.append(row.dimension_values[1].value)
+        # device_model.append(row.dimension_values[2].value)
         active_users.append(int(row.metric_values[0].value))
         new_users.append(int(row.metric_values[1].value))
         scrolled_users.append(int(row.metric_values[2].value))
@@ -239,12 +266,16 @@ with siteHeader:
         wau_per_mau.append(float(row.metric_values[4].value))
         sessions.append(float(row.metric_values[5].value))
         sessions_per_user.append(float(row.metric_values[6].value))
+        avg_session_duration.append(float(row.metric_values[7].value))
 
-    zipped_list = list(zip(date, active_users, new_users, scrolled_users, eng_duration, wau_per_mau, sessions, sessions_per_user))
+    zipped_list = list(zip(date, active_users, new_users, scrolled_users, eng_duration, wau_per_mau, sessions, sessions_per_user, avg_session_duration))
 
-    df = pd.DataFrame(zipped_list, columns=['date', 'active_users', 'new_users', 'scrolled_users', 'eng_duration', 'wau_per_mau', 'sessions', 'sessions_per_user']).sort_values(by=['date'], ascending=False)
+    df = pd.DataFrame(zipped_list, columns=['date','active_users','new_users', 'scrolled_users', 'eng_duration', 'wau_per_mau', 'sessions', 'sessions_per_user', 'avg_session_duration']).sort_values(by=['date'], ascending=False)
 
     df[['date']] =  df[['date']].apply(pd.to_datetime)
+
+    # device_zipped_list = list(zip(device_category, device_model, active_users ))
+    # device_df = df = pd.DataFrame(device_zipped_list, columns=['device_category', 'device_model', 'active_users'])
 
     # start_date, end_date = st.date_input('start date  - end date :', [])
     # if start_date < end_date:
@@ -252,7 +283,7 @@ with siteHeader:
     # else:
     #     st.error('Error: End date must fall after start date.')
 
-    # filtered_analytics = (df['date'].dt.date > start_date) & (df['date'].dt.date <= end_date)
+    # (df['date'].dt.date > start_date) & (df['date'].dt.date <= end_date)
 
     cols1,_ = st.columns((1,2)) # To make it narrower
     with cols1:
@@ -268,12 +299,19 @@ with siteHeader:
       st.line_chart(filtered_analytics, x = 'date', y = 'active_users')
 
     with col_2:
-      st.header('Duration of engagement')
-      st.bar_chart(filtered_analytics, x = 'date', y = 'eng_duration')
+      st.header('Total sessions')
+      st.line_chart(filtered_analytics, x = 'date', y = 'sessions')
+
+      st.header('Avg session duration')
+      st.bar_chart(filtered_analytics, x = 'date', y = 'avg_session_duration')
+
+      # st.header('Devices Used')
+      # st.bar_chart(device_df, x = 'device_category', y = 'active_users')
+ 
 
   # with tab2:
     # property_id = st.secrets["m_property_id"]
-    # client = BetaAnalyticsDataClient.from_service_account_info(json.loads(st.secrets["google_man"]))
+    # client = BetaAnalyticsDataClient.from_service_account_info(json.loads(st.secrets["google_man_v2"]))
 
     # manager_request = RunReportRequest(
     # property=f"properties/{property_id}",
@@ -309,7 +347,7 @@ with siteHeader:
     # m_df[['date']] =  m_df[['date']].apply(pd.to_datetime)
     # print(m_df.head())
 
-    # m_filtered_analytics = df_filter('Datetime Filter (Move slider to filter)', m_df)
+    # m_filtered_analytics = df_filter_2('Datetime Filter (Move slider to filter)', m_df)
     # m_col_1, m_col_2 = st.columns(2)
 
     # with m_col_1:
@@ -327,15 +365,17 @@ with siteHeader:
     property_id = st.secrets["b_property_id"]
     client = BetaAnalyticsDataClient.from_service_account_info(json.loads(st.secrets["google_man"]))
     
-    builder_request = RunReportRequest(
+    b_request = RunReportRequest(
     property=f"properties/{property_id}",
     dimensions=[Dimension(name="date")],
     metrics=[Metric(name="activeUsers"), Metric(name="newUsers"), Metric(name="scrolledUsers"), Metric(name="userEngagementDuration"), Metric(name="wauPerMau"), Metric(name="sessions"), Metric(name="sessionsPerUser"), Metric(name='averageSessionDuration'), Metric(name='engagedSessions')],
     date_ranges=[DateRange(start_date="2020-03-31", end_date="today")],
     )
-    builder_response = client.run_report(builder_request)
+    b_explorer_response = client.run_report(b_request)
 
     b_date = []
+    b_device_category = []
+    b_device_model = []
     b_active_users = []
     b_new_users = []
     b_scrolled_users = []
@@ -343,9 +383,12 @@ with siteHeader:
     b_wau_per_mau = []
     b_sessions = []
     b_sessions_per_user = []
+    b_avg_session_duration = []
 
-    for row in builder_response.rows:
+    for row in explorer_response.rows:
         b_date.append(row.dimension_values[0].value)
+        # b_device_category.append(row.dimension_values[1].value)
+        # b_device_model.append(row.dimension_values[2].value)
         b_active_users.append(int(row.metric_values[0].value))
         b_new_users.append(int(row.metric_values[1].value))
         b_scrolled_users.append(int(row.metric_values[2].value))
@@ -353,30 +396,47 @@ with siteHeader:
         b_wau_per_mau.append(float(row.metric_values[4].value))
         b_sessions.append(float(row.metric_values[5].value))
         b_sessions_per_user.append(float(row.metric_values[6].value))
+        b_avg_session_duration.append(float(row.metric_values[7].value))
 
-    b_zipped_list = list(zip(b_date, b_active_users, b_new_users, b_scrolled_users, b_eng_duration, b_wau_per_mau, b_sessions, b_sessions_per_user))
+    b_zipped_list = list(zip(date, active_users, new_users, scrolled_users, eng_duration, wau_per_mau, sessions, sessions_per_user, avg_session_duration))
 
-    b_df = pd.DataFrame(b_zipped_list, columns=['date', 'active_users', 'new_users', 'scrolled_users', 'eng_duration', 'wau_per_mau', 'sessions', 'sessions_per_user']).sort_values(by=['date'], ascending=False)
+    b_df = pd.DataFrame(b_zipped_list, columns=['date','active_users','new_users', 'scrolled_users', 'eng_duration', 'wau_per_mau', 'sessions', 'sessions_per_user', 'avg_session_duration']).sort_values(by=['date'], ascending=False)
 
-    b_df[['date']] =  b_df[['date']].apply(pd.to_datetime) 
+    b_df[['date']] =  b_df[['date']].apply(pd.to_datetime)
+
+    # device_zipped_list = list(zip(device_category, device_model, active_users ))
+    # device_df = df = pd.DataFrame(device_zipped_list, columns=['device_category', 'device_model', 'active_users'])
+
+    # start_date, end_date = st.date_input('start date  - end date :', [])
+    # if start_date < end_date:
+    #     pass
+    # else:
+    #     st.error('Error: End date must fall after start date.')
+
+    # (df['date'].dt.date > start_date) & (df['date'].dt.date <= end_date)
 
     cols1,_ = st.columns((1,2)) # To make it narrower
     with cols1:
-      filtered_analytics = df_filter('Datetime Filter (Move slider to filter)', b_df)
+      b_filtered_analytics = df_filter_2('Datetime Filter (Move slider to filter)', b_df)
 
-    # b_filtered_analytics = df_filter('Datetime Filter (Move slider to filter)', b_df)
-    b_col_1, b_col_2 = st.columns(2)
+    col_1, col_2 = st.columns(2)
 
-    with b_col_1:
+    with col_1:
       st.header('New users')
-      st.line_chart(b_df, x = 'date', y = 'new_users')
+      st.line_chart(b_filtered_analytics, x = 'date', y = 'new_users')
 
       st.header('Active users')
-      st.line_chart(b_df, x = 'date', y = 'active_users')
+      st.line_chart(b_filtered_analytics, x = 'date', y = 'active_users')
 
-    with b_col_2:
-      st.header('Duration of engagement')
-      st.bar_chart(b_df, x = 'date', y = 'eng_duration')
+    with col_2:
+      st.header('Total sessions')
+      st.line_chart(b_filtered_analytics, x = 'date', y = 'sessions')
+
+      st.header('Avg session duration')
+      st.bar_chart(b_filtered_analytics, x = 'date', y = 'avg_session_duration')
+
+      # st.header('Devices Used')
+      # st.bar_chart(device_df, x = 'device_category', y = 'active_users')
 
 
 
