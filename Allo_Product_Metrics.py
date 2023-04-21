@@ -6,6 +6,7 @@ import json
 import numpy as np
 import requests
 import datetime
+import locale
 from google.analytics.data_v1beta import BetaAnalyticsDataClient
 from google.analytics.data_v1beta.types import (
     DateRange,
@@ -44,6 +45,27 @@ def df_filter(message,df):
 
         return filtered_df
 
+# def df_filter(message,df):
+#         slider_1, slider_2 = st.slider('%s' % (message),0,len(df)-1,[0,len(df)-1],1)
+
+#         while len(str(df.iloc[slider_1][1]).replace('.0','')) < 4:
+#             df.iloc[slider_1,1] = '0' + str(df.iloc[slider_1][1]).replace('.0','')
+            
+#         while len(str(df.iloc[slider_2][1]).replace('.0','')) < 4:
+#             df.iloc[slider_2,1] = '0' + str(df.iloc[slider_1][1]).replace('.0','')
+
+#         start_date = datetime.datetime.strptime(str(df.iloc[slider_1][0]).replace('.0','') + str(df.iloc[slider_1][1]).replace('.0',''),'%Y-%m-%d %H:%M:%S%f')
+#         start_date = start_date.strftime('%d %b %Y, %I:%M%p')
+        
+#         end_date = datetime.datetime.strptime(str(df.iloc[slider_2][0]).replace('.0','') + str(df.iloc[slider_2][1]).replace('.0',''),'%Y-%m-%d %H:%M:%S%f')
+#         end_date = end_date.strftime('%d %b %Y, %I:%M%p')
+
+#         st.info('Start: **%s**    End: **%s**' % (start_date,end_date))
+        
+#         filtered_df = df.iloc[slider_1:slider_2+1][:].reset_index(drop=True)
+
+#         return filtered_df
+
 siteHeader = st.container()
 
 with siteHeader:
@@ -56,41 +78,122 @@ with siteHeader:
   round_response = requests.request("GET", round_url)
   round_json = round_response.json()
   round_df = pd.json_normalize(round_json)
-  # round_df['applicationsStartTime'] = pd.to_datetime(round_df['applicationsStartTime'].astype(int),unit='s')
-  # round_df['applicationsEndTime'] = pd.to_datetime(round_df['applicationsEndTime'].astype(int),unit='s')
-  # round_df['roundEndTime'] = pd.to_datetime(round_df['roundEndTime'].astype(int),unit='s')
-  # round_df['applicationMetadata.lastUpdatedOn'] = pd.to_datetime(round_df['applicationMetadata.lastUpdatedOn'].astype(int),unit='s')
+  round_df['applicationsStartTime'] = pd.to_datetime(round_df['applicationsStartTime'].astype(int),unit='s')
+  round_df['applicationsEndTime'] = pd.to_datetime(round_df['applicationsEndTime'].astype(int),unit='s')
+  round_df['roundStartTime'] = pd.to_datetime(round_df['roundStartTime'].astype(int),unit='s')
+  round_df['roundEndTime'] = pd.to_datetime(round_df['roundEndTime'].astype(int),unit='s')
+  round_df['applicationMetadata.lastUpdatedOn'] = round_df['applicationMetadata.lastUpdatedOn'].fillna(0)
+  round_df['applicationMetadata.lastUpdatedOn'] = pd.to_datetime(round_df['applicationMetadata.lastUpdatedOn'].astype(int)/1000,unit='s')
 
   # filtered_df = df_filter('Move slider to filter data',round_df)
 
+  new_round_records = round_df.loc[round_df['applicationMetadata.lastUpdatedOn'] >= pd.Timestamp.today().normalize()] 
+
   col1, col2, col3 = st.columns(3)
-  col1.metric("QF Round", str(len(round_df.index)), f"+{len(round_df.index)} from yesterday")
+  col1.metric("QF Round", str(len(round_df.index)), f"{len(new_round_records.index)} from yesterday")
   col2.metric("QV Rounds", "N/A", "0 from yesterday")
   col3.metric("Direct Grant Rounds", "N/A", "0 from yesterday")
 
-  col1.metric("Avg Total Contribution Amount (QF)", str(round_df.loc[:, 'amountUSD'].mean().round(2)))
-  col2.metric("$ Distribution (Matched funding)", "N/A")
-  col3.metric("$ ditribution (Direct donation)", str(round_df.loc[:, 'amountUSD'].sum().round(2)))
+  locale.setlocale(locale.LC_ALL, 'en_US.UTF-8')
 
-  st.title('On-chain Data')
+  col1.metric("$ Total Distribution", str(locale.currency(round_df.loc[:, 'amountUSD'].sum().round(2), grouping = True)))
+  col2.metric("Avg Total Distribution", str(locale.currency(round_df.loc[:, 'amountUSD'].mean().round(2), grouping = True)))
+  col3.metric("Total Unique Contributors",str(round_df.loc[:, 'uniqueContributors'].sum()))
+  
+  st.title('Project Overview')
 
   # Projects
-  projects_url = f"https://grants-stack-indexer.fly.dev/data/{chain_id}/rounds/{round_address}/projects.json"
-  proj_response = requests.request("GET", projects_url)
-  proj_json = proj_response.json()
-  project_df = pd.json_normalize(proj_json)
+  tot_projects_url = f"https://grants-stack-indexer.fly.dev/data/{chain_id}/projects.json"
+  tot_proj_response = requests.request("GET", tot_projects_url)
+  tot_proj_json = tot_proj_response.json()
+  tot_project_df = pd.json_normalize(tot_proj_json)
 
-  # Contributors
-  contributors_url = f"https://grants-stack-indexer.fly.dev/data/{chain_id}/rounds/{round_address}/contributors.json"
-  con_response = requests.request("GET", contributors_url)
-  con_json = con_response.json()
-  contributors_df = pd.json_normalize(con_json)
+  print(tot_project_df.keys())
+  tot_project_df['metadata.createdAt'] = tot_project_df['metadata.createdAt'].fillna(0)
+  tot_project_df['metadata.createdAt'] = pd.to_datetime(tot_project_df['metadata.createdAt'].astype(int)/1000,unit='s')
 
-  # Votes
-  votes_url = f"https://grants-stack-indexer.fly.dev/data/{chain_id}/rounds/{round_address}/votes.json"
-  vote_response = requests.request("GET", votes_url)
-  vote_json = vote_response.json()
-  vote_df = pd.json_normalize(vote_json)
+  new_projects = tot_project_df.loc[tot_project_df['metadata.createdAt'] >= pd.Timestamp.today().normalize()] 
+
+  # Round details
+  filtered_round_data = round_df.loc[round_df['roundStartTime'] >= '2023-04-25 00:00:00']
+
+  r_round = []
+  r_projects = []
+  r_name = []
+  # accepted_projects = []
+  # rejected_projects = []
+  # no_decsision_projects = []
+  p_data = pd.DataFrame()
+  v_data = pd.DataFrame()
+
+  for ind in filtered_round_data.index:
+
+    r_round.append(filtered_round_data['id'][ind])
+    r_name.append(filtered_round_data["metadata.name"][ind])
+
+    r_projects_url = f"https://grants-stack-indexer.fly.dev/data/{chain_id}/rounds/{filtered_round_data['id'][ind]}/projects.json"
+
+    proj_response = requests.request("GET", r_projects_url)
+    proj_json = proj_response.json()
+    projects_df = pd.json_normalize(proj_json)
+
+    votes_url = f"https://grants-stack-indexer.fly.dev/data/{chain_id}/rounds/{filtered_round_data['id'][ind]}/votes.json"
+    votes_response = requests.request("GET", votes_url)
+    votes_json = votes_response.json()
+    votes_df = pd.json_normalize(votes_json)
+
+    r_projects.append(len(projects_df.index))
+    p_data = p_data.append(projects_df, ignore_index=True)
+    v_data = v_data.append(votes_df, ignore_index=True)
+    # accepted_projects.append(projects_df.loc[df['International'] == 'N', 'Student_ID'].nunique())
+    # rejected_projects.append(projects_df.loc[df['International'] == 'N', 'Student_ID'].nunique())
+    # no_decsision_projects.append()
+
+  beta_round_dataset = pd.DataFrame(list(zip(r_round, r_name, r_projects)), columns =['Round ID', 'Round name', 'Total projects'])
+  p_data['metadata.application.project.createdAt'] = p_data['metadata.application.project.createdAt'].fillna(0)
+  p_data['metadata.application.project.createdAt'] = pd.to_datetime(p_data['metadata.application.project.createdAt'].astype(int)/1000,unit='s')
+  
+  new_round_projects = p_data.loc[p_data['metadata.application.project.createdAt'] >= pd.Timestamp.today().normalize()] 
+  
+  col1_oc, col2_oc, col3_oc = st.columns(3)
+  col1_oc.metric("Total Projects", str(len(tot_project_df.index)), f"{len(new_round_records.index)} from yesterday")
+  col2_oc.metric("Projects in Current Round", str(p_data['metadata.application.project.id'].nunique()), f"{new_round_projects['metadata.application.project.id'].nunique()} from yesterday")
+  col3_oc.metric("Total Votes", "N/A", "0 from yesterday")
+
+  st.subheader('Projects by Current Round')
+
+  # style
+  th_props = [
+    ('font-size', '14px'),
+    ('text-align', 'center'),
+    ('font-weight', 'bold'),
+    ('color', '#6d6d6d'),
+    ('background-color', '#f7ffff')
+    ]
+                                
+  td_props = [
+    ('font-size', '12px')
+    ]
+                                  
+  styles = [
+    dict(selector="th", props=th_props),
+    dict(selector="td", props=td_props)
+    ]
+
+  # table
+  table_df = beta_round_dataset[['Round name', 'Total projects']].style.set_properties(**{'text-align': 'left'}).set_table_styles(styles)
+  st.table(table_df)
+  # # Contributors
+  # contributors_url = f"https://grants-stack-indexer.fly.dev/data/{chain_id}/rounds/{round_address}/contributors.json"
+  # con_response = requests.request("GET", contributors_url)
+  # con_json = con_response.json()
+  # contributors_df = pd.json_normalize(con_json)
+
+  # # Votes
+  # votes_url = f"https://grants-stack-indexer.fly.dev/data/{chain_id}/rounds/{round_address}/votes.json"
+  # vote_response = requests.request("GET", votes_url)
+  # vote_json = vote_response.json()
+  # vote_df = pd.json_normalize(vote_json)
 
 
   st.title('App Usage')
