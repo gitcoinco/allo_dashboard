@@ -4,6 +4,7 @@ import pandas as pd
 from pandas.io.json import json_normalize
 import json
 import numpy as np
+import altair as alt
 import requests
 import datetime
 import locale
@@ -148,6 +149,7 @@ with siteHeader:
   # no_decsision_projects = []
   p_data = pd.DataFrame()
   v_data = pd.DataFrame()
+  a_data = pd.DataFrame()
 
   for ind in filtered_round_data.index:
 
@@ -160,35 +162,115 @@ with siteHeader:
     proj_json = proj_response.json()
     projects_df = pd.json_normalize(proj_json)
 
-    votes_url = f"https://grants-stack-indexer.fly.dev/data/{chain_id}/rounds/{filtered_round_data['id'][ind]}/votes.json"
-    votes_response = requests.request("GET", votes_url)
-    votes_json = votes_response.json()
-    votes_df = pd.json_normalize(votes_json)
-
     r_projects.append(len(projects_df.index))
     p_data = p_data.append(projects_df, ignore_index=True)
-    v_data = v_data.append(votes_df, ignore_index=True)
+
+    
+    r_app_url = f"https://grants-stack-indexer.fly.dev/data/{chain_id}/rounds/{filtered_round_data['id'][ind]}/applications.json"
+
+    app_response = requests.request("GET", r_app_url)
+    app_json = proj_response.json()
+    app_df = pd.json_normalize(app_json)
+
+    a_data = a_data.append(app_df, ignore_index=True)
+
+    votes_url = f"https://grants-stack-indexer.fly.dev/data/{chain_id}/rounds/{filtered_round_data['id'][ind]}/votes.json"
+
+    try:
+
+      votes_response = requests.request("GET", votes_url)
+      votes_json = votes_response.json()
+      votes_df = pd.json_normalize(votes_json)
+
+      v_data = v_data.append(votes_df, ignore_index=True)
+
+    except:
+      continue
+
     # accepted_projects.append(projects_df.loc[df['International'] == 'N', 'Student_ID'].nunique())
     # rejected_projects.append(projects_df.loc[df['International'] == 'N', 'Student_ID'].nunique())
     # no_decsision_projects.append()
 
+   # Get timestamp using block number
+  initial_block = a_data['createdAtBlock'].min()
+
+  eth_url = f"https://api.etherscan.io/api?module=block&action=getblockreward&blockno={initial_block}&apikey={st.secrets['eth_api']}"
+  eth_response = requests.request("GET", eth_url)
+  eth_json = eth_response.json()
+
+  block_time = eth_json['result']['timeStamp']
+
+  app_timestamps = []
+  for i in a_data['createdAtBlock']:
+    app_timestamps.append(int(block_time) + ( int(i) - int(initial_block))*12)
+
+  status_timestamps = []
+  for i in a_data['statusUpdatedAtBlock']:
+    status_timestamps.append(int(block_time) + ( int(i) - int(initial_block))*12)
+
+  a_data['createdAt'] = app_timestamps
+  a_data['statusUpdated'] = status_timestamps
+
+  vote_timestamps = []
+  for i in v_data['blockNumber']:
+    vote_timestamps.append(int(block_time) + ( int(i) - int(initial_block))*12)
+
+  v_data['createdAt'] = vote_timestamps
+
   beta_round_dataset = pd.DataFrame(list(zip(r_round, r_name, r_projects)), columns =['Round ID', 'Round name', 'Total projects'])
   p_data['metadata.application.project.createdAt'] = p_data['metadata.application.project.createdAt'].fillna(0)
   p_data['metadata.application.project.createdAt'] = pd.to_datetime(p_data['metadata.application.project.createdAt'].astype(int)/1000,unit='s')
+  a_data['createdAt'] = pd.to_datetime(a_data['createdAt'].astype(int),unit='s')
+  a_data['statusUpdated'] = pd.to_datetime(a_data['statusUpdated'].astype(int),unit='s')
+  v_data['createdAt'] = pd.to_datetime(v_data['createdAt'].astype(int),unit='s')
+
+  a_data['reviewTime'] = (a_data['statusUpdated'] - a_data['createdAt']) / np.timedelta64(1, 'D')
   
   new_round_projects = p_data.loc[p_data['metadata.application.project.createdAt'] >= pd.Timestamp.today().normalize()] 
+  new_app_projects = a_data.loc[a_data['createdAt'] >= pd.Timestamp.today().normalize()] 
+  app_accepted = a_data.loc[a_data["status"].isin(['APPROVED'])] 
+  new_app_accepted = a_data.loc[(a_data['createdAt'] >= pd.Timestamp.today().normalize()) & (a_data["status"].isin(['APPROVED']))] 
+  new_votes = v_data.loc[v_data['createdAt'] >= pd.Timestamp.today().normalize()] 
   
-  col1_oc, col2_oc, col3_oc = st.columns(3)
-  col1_oc.metric("Total Projects", str(len(tot_project_df.index)), f"{len(new_round_records.index)} from yesterday")
-  col2_oc.metric("Projects in Current Round", str(p_data['metadata.application.project.id'].nunique()), f"{new_round_projects['metadata.application.project.id'].nunique()} from yesterday")
-  col3_oc.metric("Total Votes", "N/A", "0 from yesterday")
+  print(a_data.keys())
+  col1_oc, col2_oc, col3_oc, col4_oc = st.columns(4)
+  col1_oc.metric("Total Projects", str(len(tot_proj.index)), f"{len(new_round_records.index)} from yesterday")
+  col2_oc.metric("Total Applications", str(a_data['projectNumber'].nunique()), f"{new_app_projects['projectNumber'].nunique()} from yesterday")
+  col3_oc.metric("Accepted Applications", str(app_accepted['projectNumber'].nunique()), f"{new_app_accepted['projectNumber'].nunique()} from yesterday")
+  col4_oc.metric("Avg Review Time (days)", str(a_data['reviewTime'].mean().round(1)))
+
+  col1_oc.metric("Total Votes", str(v_data["id"].nunique()), f"{new_votes['id'].nunique()} from yesterday")
+  col2_oc.metric("Total Unique Contributors", str(v_data['voter'].nunique()), f"{new_votes['voter'].nunique()} from yesterday")
+  col3_oc.metric("Total Contribution", str(locale.currency(v_data['amountUSD'].sum().round(2), grouping = True)), str(locale.currency(v_data['amountUSD'].sum().round(2) - new_votes['amountUSD'].sum().round(2), grouping = True)) + " from yesterday")
+  col4_oc.metric("Avg Contribution", str(locale.currency(v_data["amountUSD"].mean().round(2), grouping = True)), str(locale.currency(v_data["amountUSD"].mean().round(2) - new_votes['amountUSD'].mean().round(2), grouping = True)) + " from yesterday")
 
   p_count = p_data['metadata.application.project.createdAt'].value_counts().rename_axis('Creation date').reset_index(name='Projects')
   
   col_char1, col_char2 = st.columns(2)
-  # with col_char1:
-  st.subheader('Project Creation')
-  st.bar_chart(p_count, x = 'Creation date', y = 'Projects')
+  with col_char1:
+    st.subheader('Project Creation')
+    st.bar_chart(p_count, x = 'Creation date', y = 'Projects')
+
+    # st.subheader('Avg Review Time by Project creation')
+    # review_chart = alt.Chart(data=a_data).mark_bar().encode(
+    #         x=alt.X("monthdate(createdAt):O", title='Project creation'),
+    #         y=alt.Y("avg(reviewTime):Q"),
+    #     )
+
+    # st.altair_chart(review_chart, use_container_width=True)
+
+  with col_char2:
+    st.subheader("Votes in Current Round")
+
+    chart = alt.Chart(data=v_data).mark_bar().encode(
+            x=alt.X("monthdate(createdAt):O", title='Date'),
+            y=alt.Y("count(id):Q"),
+        )
+
+    st.altair_chart(chart, use_container_width=True)
+  # with col_char2:
+  #   st.subheader('Votes over Time')
+  #   st.bar_chart(v_data, x = 'createdAt', y = 'transaction')
 
   # with col_char2:
   #   st.subheader('Projects in the Beta Round')
