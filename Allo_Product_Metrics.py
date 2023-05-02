@@ -391,7 +391,7 @@ with siteHeader:
       # st.bar_chart(device_df, x = 'device_category', y = 'active_users')
  
 
-  # with tab2:
+  with tab2:
     property_id = st.secrets["m_property_id"]
     client = BetaAnalyticsDataClient.from_service_account_info(json.loads(st.secrets["google_man_v2"]))
 
