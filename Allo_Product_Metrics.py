@@ -88,6 +88,31 @@ def df_filter_2(message,df):
 
 #         return filtered_df
 
+@st.cache_data
+def load_data(url):
+  response = requests.request("GET", url)
+  json = response.json()
+  df = pd.json_normalize(json)
+  return df
+
+@st.cache_data 
+def load_json_data(url):
+  response = requests.request("GET", url)
+  json = response.json()
+  return json
+
+@st.cache_data  # 👈 Add the caching decorator
+def load_google_data(property_id, google_secret,_metrics, _dates):
+  client = BetaAnalyticsDataClient.from_service_account_info(json.loads(google_secret))
+  request = RunReportRequest(
+    property=f"properties/{property_id}",
+    dimensions=[Dimension(name="date")],
+    metrics=_metrics,
+    date_ranges=_dates
+    )
+  response = client.run_report(request)
+  return response
+
 siteHeader = st.container()
 
 with siteHeader:
@@ -97,9 +122,7 @@ with siteHeader:
   st.title('Round Overview')
   # Rounds
   round_url = f"https://grants-stack-indexer.fly.dev/data/{chain_id}/rounds.json"
-  round_response = requests.request("GET", round_url)
-  round_json = round_response.json()
-  round_df = pd.json_normalize(round_json)
+  round_df = load_data(round_url)
   round_df['applicationsStartTime'] = pd.to_datetime(round_df['applicationsStartTime'].astype(int),unit='s')
   round_df['applicationsEndTime'] = pd.to_datetime(round_df['applicationsEndTime'].astype(int),unit='s')
   round_df['roundStartTime'] = pd.to_datetime(round_df['roundStartTime'].astype(int),unit='s')
@@ -127,9 +150,7 @@ with siteHeader:
 
   # Projects
   tot_projects_url = f"https://grants-stack-indexer.fly.dev/data/{chain_id}/projects.json"
-  tot_proj_response = requests.request("GET", tot_projects_url)
-  tot_proj_json = tot_proj_response.json()
-  tot_project_df = pd.json_normalize(tot_proj_json)
+  tot_project_df = load_data(tot_projects_url)
 
   tot_project_df['metadata.createdAt'] = tot_project_df['metadata.createdAt'].fillna(0)
   tot_project_df['metadata.createdAt'] = pd.to_datetime(tot_project_df['metadata.createdAt'].astype(int)/1000,unit='s')
@@ -157,31 +178,21 @@ with siteHeader:
     r_name.append(filtered_round_data["metadata.name"][ind])
 
     r_projects_url = f"https://grants-stack-indexer.fly.dev/data/{chain_id}/rounds/{filtered_round_data['id'][ind]}/projects.json"
-
-    proj_response = requests.request("GET", r_projects_url)
-    proj_json = proj_response.json()
-    projects_df = pd.json_normalize(proj_json)
+    projects_df = load_data(r_projects_url)
 
     r_projects.append(len(projects_df.index))
     p_data = p_data.append(projects_df, ignore_index=True)
 
     
     r_app_url = f"https://grants-stack-indexer.fly.dev/data/{chain_id}/rounds/{filtered_round_data['id'][ind]}/applications.json"
-
-    app_response = requests.request("GET", r_app_url)
-    app_json = proj_response.json()
-    app_df = pd.json_normalize(app_json)
+    app_df = load_data(r_app_url)
 
     a_data = a_data.append(app_df, ignore_index=True)
 
     votes_url = f"https://grants-stack-indexer.fly.dev/data/{chain_id}/rounds/{filtered_round_data['id'][ind]}/votes.json"
 
     try:
-
-      votes_response = requests.request("GET", votes_url)
-      votes_json = votes_response.json()
-      votes_df = pd.json_normalize(votes_json)
-
+      votes_df = load_data(votes_url)
       v_data = v_data.append(votes_df, ignore_index=True)
 
     except:
@@ -195,8 +206,7 @@ with siteHeader:
   initial_block = a_data['createdAtBlock'].min()
 
   eth_url = f"https://api.etherscan.io/api?module=block&action=getblockreward&blockno={initial_block}&apikey={st.secrets['eth_api']}"
-  eth_response = requests.request("GET", eth_url)
-  eth_json = eth_response.json()
+  eth_json = load_json_data(eth_url)
 
   block_time = eth_json['result']['timeStamp']
 
@@ -314,16 +324,13 @@ with siteHeader:
   tab1, tab2, tab3 = st.tabs(["Explorer", "Manager", "Builder"])
 
   with tab1:
-    property_id = st.secrets["e_property_id"]
-    client = BetaAnalyticsDataClient.from_service_account_info(json.loads(st.secrets["google"]))
 
-    request = RunReportRequest(
-    property=f"properties/{property_id}",
-    dimensions=[Dimension(name="date")],
-    metrics=[Metric(name="activeUsers"), Metric(name="newUsers"), Metric(name="scrolledUsers"), Metric(name="userEngagementDuration"), Metric(name="wauPerMau"), Metric(name="sessions"), Metric(name="sessionsPerUser"), Metric(name='averageSessionDuration'), Metric(name='engagedSessions')],
-    date_ranges=[DateRange(start_date="2020-03-31", end_date="today")],
-    )
-    explorer_response = client.run_report(request)
+    property_id = st.secrets["e_property_id"]
+    google_secret = st.secrets["google"]
+    metrics = [Metric(name="activeUsers"), Metric(name="newUsers"), Metric(name="scrolledUsers"), Metric(name="userEngagementDuration"), Metric(name="wauPerMau"), Metric(name="sessions"), Metric(name="sessionsPerUser"), Metric(name='averageSessionDuration'), Metric(name='engagedSessions')]
+    dates = [DateRange(start_date="2020-03-31", end_date="today")]
+
+    explorer_response = load_google_data(property_id, google_secret, metrics, dates)
 
     date = []
     device_category = []
