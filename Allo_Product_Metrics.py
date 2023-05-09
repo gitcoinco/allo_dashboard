@@ -252,7 +252,7 @@ with siteHeader:
   col1_oc.metric("Total Votes", str(v_data["id"].nunique()), f"{new_votes['id'].nunique()} from yesterday")
   col2_oc.metric("Total Unique Contributors", str(v_data['voter'].nunique()), f"{new_votes['voter'].nunique()} from yesterday")
   col3_oc.metric("Total Contribution", str(locale.currency(v_data['amountUSD'].sum().round(2), grouping = True)), str(locale.currency(v_data['amountUSD'].sum().round(2) - new_votes['amountUSD'].sum().round(2), grouping = True)) + " from yesterday")
-  col4_oc.metric("Avg Contribution", str(locale.currency(v_data["amountUSD"].mean().round(2), grouping = True)), str(locale.currency(v_data["amountUSD"].mean().round(2) - new_votes['amountUSD'].mean().round(2), grouping = True)) + " from yesterday")
+  col4_oc.metric("Avg Contribution", str(locale.currency(round(v_data["amountUSD"].mean(),2), grouping = True)), str(locale.currency(round(v_data["amountUSD"].mean(),2) - round(new_votes['amountUSD'].mean(), 2), grouping = True)) + " from yesterday")
 
   p_count = p_data['metadata.application.project.createdAt'].value_counts().rename_axis('Creation date').reset_index(name='Projects')
   
