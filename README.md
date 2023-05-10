@@ -1,2 +1,3 @@
-# allo_dashboard
-Dashboard reviewing Allo KPIs and user activity
+# Allo Metrics Dashboard
+
+Streamlit dashboard reviewing Allo KPIs and user activity
