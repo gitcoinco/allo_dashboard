@@ -399,16 +399,12 @@ with siteHeader:
  
 
   with tab2:
-    property_id = st.secrets["m_property_id"]
-    client = BetaAnalyticsDataClient.from_service_account_info(json.loads(st.secrets["google_man_v2"]))
+    m_property_id = st.secrets["m_property_id"]
+    m_google_secret = st.secrets["google_man_v2"]
+    m_metrics=[Metric(name="activeUsers"), Metric(name="newUsers"), Metric(name="scrolledUsers"), Metric(name="userEngagementDuration"), Metric(name="wauPerMau"), Metric(name="sessions"), Metric(name="sessionsPerUser"), Metric(name='averageSessionDuration'), Metric(name='engagedSessions')]
+    m_dates=[DateRange(start_date="2020-03-31", end_date="today")]
 
-    manager_request = RunReportRequest(
-    property=f"properties/{property_id}",
-    dimensions=[Dimension(name="date")],
-    metrics=[Metric(name="activeUsers"), Metric(name="newUsers"), Metric(name="scrolledUsers"), Metric(name="userEngagementDuration"), Metric(name="wauPerMau"), Metric(name="sessions"), Metric(name="sessionsPerUser"), Metric(name='averageSessionDuration'), Metric(name='engagedSessions')],
-    date_ranges=[DateRange(start_date="2020-03-31", end_date="today")],
-    )
-    manager_response = client.run_report(manager_request)
+    manager_response = load_google_data(m_property_id, m_google_secret, m_metrics, m_dates)
 
     m_date = []
     m_active_users = []
@@ -418,6 +414,9 @@ with siteHeader:
     m_wau_per_mau = []
     m_sessions = []
     m_sessions_per_user = []
+    m_device_category = []
+    m_device_model = []
+    m_avg_session_duration = []
 
     for row in manager_response.rows:
         m_date.append(row.dimension_values[0].value)
@@ -428,39 +427,55 @@ with siteHeader:
         m_wau_per_mau.append(float(row.metric_values[4].value))
         m_sessions.append(float(row.metric_values[5].value))
         m_sessions_per_user.append(float(row.metric_values[6].value))
+        m_avg_session_duration.append(float(row.metric_values[7].value))
 
-    m_zipped_list = list(zip(m_date, m_active_users, m_new_users, m_scrolled_users, m_eng_duration, m_wau_per_mau, m_sessions, m_sessions_per_user))
+    m_zipped_list = list(zip(m_date, m_active_users, m_new_users, m_scrolled_users, m_eng_duration, m_wau_per_mau, m_sessions, m_sessions_per_user, m_avg_session_duration))
 
-    m_df = pd.DataFrame(m_zipped_list, columns=['date', 'active_users', 'new_users', 'scrolled_users', 'eng_duration', 'wau_per_mau', 'sessions', 'sessions_per_user']).sort_values(by=['date'], ascending=False)
+    m_df = pd.DataFrame(m_zipped_list, columns=['date', 'active_users', 'new_users', 'scrolled_users', 'eng_duration', 'wau_per_mau', 'sessions', 'sessions_per_user', 'avg_session_duration']).sort_values(by=['date'], ascending=False)
 
     m_df[['date']] =  m_df[['date']].apply(pd.to_datetime)
     print(m_df.head())
+    
+    # m_col_1, m_col_2 = st.columns(2)
 
-    m_filtered_analytics = df_filter_2('Datetime Filter (Move slider to filter)', m_df)
-    m_col_1, m_col_2 = st.columns(2)
+    # with m_col_1:
+    #   st.header('New users')
+    #   st.line_chart(m_filtered_analytics, x = 'date', y = 'new_users')
 
-    with m_col_1:
+    #   st.header('Active users')
+    #   st.line_chart(m_filtered_analytics, x = 'date', y = 'active_users')
+
+    # with m_col_2:
+    #   st.header('Duration of engagement')
+    #   st.bar_chart(m_filtered_analytics, x = 'date', y = 'eng_duration')
+
+    cols1,_ = st.columns((1,2)) # To make it narrower
+    with cols1:
+      m_filtered_analytics = df_filter_2('Datetime Filter (Move slider to filter)', m_df)
+
+    col_1, col_2 = st.columns(2)
+
+    with col_1:
       st.header('New users')
       st.line_chart(m_filtered_analytics, x = 'date', y = 'new_users')
 
       st.header('Active users')
       st.line_chart(m_filtered_analytics, x = 'date', y = 'active_users')
 
-    with m_col_2:
-      st.header('Duration of engagement')
-      st.bar_chart(m_filtered_analytics, x = 'date', y = 'eng_duration')
+    with col_2:
+      st.header('Total sessions')
+      st.line_chart(m_filtered_analytics, x = 'date', y = 'sessions')
+
+      st.header('Avg session duration')
+      st.bar_chart(m_filtered_analytics, x = 'date', y = 'avg_session_duration')
 
   with tab3:
-    property_id = st.secrets["b_property_id"]
-    client = BetaAnalyticsDataClient.from_service_account_info(json.loads(st.secrets["google_man"]))
-    
-    b_request = RunReportRequest(
-    property=f"properties/{property_id}",
-    dimensions=[Dimension(name="date")],
-    metrics=[Metric(name="activeUsers"), Metric(name="newUsers"), Metric(name="scrolledUsers"), Metric(name="userEngagementDuration"), Metric(name="wauPerMau"), Metric(name="sessions"), Metric(name="sessionsPerUser"), Metric(name='averageSessionDuration'), Metric(name='engagedSessions')],
-    date_ranges=[DateRange(start_date="2020-03-31", end_date="today")],
-    )
-    b_explorer_response = client.run_report(b_request)
+    b_property_id = st.secrets["b_property_id"]
+    b_google_secret = st.secrets["google_man"]
+    b_metrics=[Metric(name="activeUsers"), Metric(name="newUsers"), Metric(name="scrolledUsers"), Metric(name="userEngagementDuration"), Metric(name="wauPerMau"), Metric(name="sessions"), Metric(name="sessionsPerUser"), Metric(name='averageSessionDuration'), Metric(name='engagedSessions')]
+    b_dates=[DateRange(start_date="2020-03-31", end_date="today")]
+
+    builder_response = load_google_data(b_property_id, b_google_secret, b_metrics, b_dates)
 
     b_date = []
     b_device_category = []
@@ -474,7 +489,7 @@ with siteHeader:
     b_sessions_per_user = []
     b_avg_session_duration = []
 
-    for row in explorer_response.rows:
+    for row in builder_response.rows:
         b_date.append(row.dimension_values[0].value)
         # b_device_category.append(row.dimension_values[1].value)
         # b_device_model.append(row.dimension_values[2].value)
@@ -487,7 +502,7 @@ with siteHeader:
         b_sessions_per_user.append(float(row.metric_values[6].value))
         b_avg_session_duration.append(float(row.metric_values[7].value))
 
-    b_zipped_list = list(zip(date, active_users, new_users, scrolled_users, eng_duration, wau_per_mau, sessions, sessions_per_user, avg_session_duration))
+    b_zipped_list = list(zip(b_date, b_active_users, b_new_users, b_scrolled_users, b_eng_duration, b_wau_per_mau, b_sessions, b_sessions_per_user, b_avg_session_duration))
 
     b_df = pd.DataFrame(b_zipped_list, columns=['date','active_users','new_users', 'scrolled_users', 'eng_duration', 'wau_per_mau', 'sessions', 'sessions_per_user', 'avg_session_duration']).sort_values(by=['date'], ascending=False)
 
