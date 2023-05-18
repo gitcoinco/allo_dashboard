@@ -20,10 +20,6 @@ path = 'Allo_Product_Dashboard-ac51c10481ae.json'
 
 st.set_page_config(layout="wide")
 
-# Variables
-chain_id = 1
-round_address = "0xD95A1969c41112cEE9A2c931E849bCef36a16F4C"
-
 # filter function
 def df_filter(message,df):
         slider_1, slider_2 = st.slider('%s' % (message),0,len(df)-1,[0,len(df)-1],1)
@@ -119,6 +115,24 @@ with siteHeader:
   st.title('Allo Product Metrics')
   st.text('In this report, we''ll take a deep dive analysis of general and usage specific metrics for Allo.')
 
+  # Variables
+  # chain_id = 1
+  cols_network,_ = st.columns((1,2)) # To make it narrower
+  with cols_network:
+      chain = st.selectbox(
+        'Network',
+        ('Mainnet', 'Optimism', 'Fantom', 'Goerli'))
+  round_address = "0xD95A1969c41112cEE9A2c931E849bCef36a16F4C"
+
+  if chain  == 'Mainnet':
+    chain_id = 1
+  elif chain == 'Optimism':
+    chain_id = 10
+  elif chain == 'Fantom':
+    chain_id = 250
+  elif chain == 'Goerli':
+    chain_id = 5
+
   st.title('Round Overview')
   # Rounds
   round_url = f"https://grants-stack-indexer.fly.dev/data/{chain_id}/rounds.json"
@@ -162,6 +176,12 @@ with siteHeader:
   # Round details
   filtered_round_data = round_df.loc[round_df['roundStartTime'] >= '2023-04-25 00:00:00']
 
+  cols_pools,_ = st.columns((1,2)) # To make it narrower
+  with cols_pools:
+    round_ids = st.multiselect(
+      'Round pools:',
+      filtered_round_data.index)
+
   r_round = []
   r_projects = []
   r_name = []
@@ -171,6 +191,8 @@ with siteHeader:
   p_data = pd.DataFrame()
   v_data = pd.DataFrame()
   a_data = pd.DataFrame()
+
+  print(round_ids)
 
   for ind in filtered_round_data.index:
 
@@ -242,7 +264,7 @@ with siteHeader:
   new_app_accepted = a_data.loc[(a_data['createdAt'] >= pd.Timestamp.today().normalize()) & (a_data["status"].isin(['APPROVED']))] 
   new_votes = v_data.loc[v_data['createdAt'] >= pd.Timestamp.today().normalize()] 
   
-  print(a_data.keys())
+  # print(a_data.keys())
   col1_oc, col2_oc, col3_oc, col4_oc = st.columns(4)
   col1_oc.metric("Total Projects", str(len(tot_proj.index)), f"{len(new_round_records.index)} from yesterday")
   col2_oc.metric("All unique applications submitted after Apr 12th", str(a_data['projectNumber'].nunique()), f"{new_app_projects['projectNumber'].nunique()} from yesterday")
@@ -434,7 +456,7 @@ with siteHeader:
     m_df = pd.DataFrame(m_zipped_list, columns=['date', 'active_users', 'new_users', 'scrolled_users', 'eng_duration', 'wau_per_mau', 'sessions', 'sessions_per_user', 'avg_session_duration']).sort_values(by=['date'], ascending=False)
 
     m_df[['date']] =  m_df[['date']].apply(pd.to_datetime)
-    print(m_df.head())
+    # print(m_df.head())
     
     # m_col_1, m_col_2 = st.columns(2)
 
