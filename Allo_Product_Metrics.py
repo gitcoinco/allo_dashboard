@@ -162,6 +162,11 @@ with siteHeader:
   
   st.title('Project Overview')
 
+  min_date = datetime.datetime(2022,1,1)
+  max_date = datetime.datetime.now()
+
+  a_date = st.date_input("Pick a date range", (min_date, max_date))
+
   # Projects
   tot_projects_url = f"https://grants-stack-indexer.fly.dev/data/{chain_id}/projects.json"
   tot_project_df = load_data(tot_projects_url)
@@ -169,18 +174,13 @@ with siteHeader:
   tot_project_df['metadata.createdAt'] = tot_project_df['metadata.createdAt'].fillna(0)
   tot_project_df['metadata.createdAt'] = pd.to_datetime(tot_project_df['metadata.createdAt'].astype(int)/1000,unit='s')
 
-  tot_proj = tot_project_df.loc[tot_project_df['metadata.createdAt'] >= '2023-04-01 00:00:00'] 
+  tot_proj = tot_project_df.loc[(tot_project_df['metadata.createdAt'] >= f'{a_date[0]} 00:00:00') & 
+  (tot_project_df['metadata.createdAt'] < f'{a_date[1]} 00:00:00')]
 
   new_projects = tot_proj.loc[tot_proj['metadata.createdAt'] >= pd.Timestamp.today().normalize()] 
 
   # Round details
-  filtered_round_data = round_df.loc[round_df['roundStartTime'] >= '2023-04-25 00:00:00']
-
-  cols_pools,_ = st.columns((1,2)) # To make it narrower
-  with cols_pools:
-    round_ids = st.multiselect(
-      'Round pools:',
-      filtered_round_data.index)
+  filtered_round_data = round_df.loc[(round_df['roundStartTime'] >= f'{a_date[0]} 00:00:00') & (round_df['roundStartTime'] < f'{a_date[1]} 00:00:00')]
 
   r_round = []
   r_projects = []
@@ -191,8 +191,6 @@ with siteHeader:
   p_data = pd.DataFrame()
   v_data = pd.DataFrame()
   a_data = pd.DataFrame()
-
-  print(round_ids)
 
   for ind in filtered_round_data.index:
 
@@ -280,7 +278,7 @@ with siteHeader:
   
   col_char1, col_char2 = st.columns(2)
   with col_char1:
-    st.subheader('Project Creation')
+    st.subheader('Projects in Selected Rounds')
     st.bar_chart(p_count, x = 'Creation date', y = 'Projects')
 
     # st.subheader('Avg Review Time by Project creation')
@@ -292,7 +290,7 @@ with siteHeader:
     # st.altair_chart(review_chart, use_container_width=True)
 
   with col_char2:
-    st.subheader("Votes in Current Round")
+    st.subheader("Votes in Selected Rounds")
 
     chart = alt.Chart(data=v_data).mark_bar().encode(
             x=alt.X("monthdate(createdAt):O", title='Date'),
